@@ -1,0 +1,9 @@
+POST http://localhost:5000/api/turnos
+Content-Type: application/json
+
+{
+    "cliente": "Sergio Paez",
+    "servicio": "Corte de Cabello",
+    "fecha": "2026-05-10",
+    "hora": "10:00"
+}
