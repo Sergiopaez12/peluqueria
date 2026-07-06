@@ -1,63 +1,117 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
+import { Navy } from '../constants/theme';
 import { API_URL } from '../config/api';
 
-const SERVICIOS = ['Corte de cabello', 'Barba', 'Corte + Barba', 'Coloración', 'Tratamiento capilar'];
-
-export default function AgendarScreen({ navigation }) {
+export default function AgendarScreen({ navigation, route }) {
   const { token } = useContext(AuthContext);
-  const [servicio, setServicio] = useState('');
+  const params = route.params || {};
+  const isReagendar = !!params.reagendarTurnoId;
+  const originalTurnoId = params.reagendarTurnoId;
+
+  const [servicios, setServicios] = useState([]);
+  const [servicio, setServicio] = useState(params.servicioInicial || '');
   
-  // Para demo, usamos fecha de mañana
-  const manana = new Date();
-  manana.setDate(manana.getDate() + 1);
-  const fechaStr = manana.toISOString().split('T')[0];
-  
+  // Date chips generation: Hoy, Mañana, Pasado Mañana, En 3 días
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  const [dateChips, setDateChips] = useState([]);
+
   const [hora, setHora] = useState('');
   const [slots, setSlots] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingServicios, setLoadingServicios] = useState(true);
   const [enviando, setEnviando] = useState(false);
 
-  const cargarSlots = async () => {
-    setLoading(true);
+  useEffect(() => {
+    // Generate dates
+    const chips = [];
+    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    for (let i = 0; i < 4; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${diasSemana[d.getDay()]} ${d.getDate()}`;
+      const valor = d.toISOString().split('T')[0];
+      chips.push({ label, valor });
+    }
+    setDateChips(chips);
+
+    cargarServicios();
+  }, []);
+
+  const cargarServicios = async () => {
     try {
-      const res = await axios.get(`${API_URL}/horarios/slots?fecha=${fechaStr}`, {
+      const res = await axios.get(`${API_URL}/servicios`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setServicios(res.data);
+    } catch (e) {
+      console.log('Error cargando servicios', e);
+    }
+    setLoadingServicios(false);
+  };
+
+  const cargarSlots = async (fecha) => {
+    if (!fecha) return;
+    setLoadingSlots(true);
+    try {
+      const res = await axios.get(`${API_URL}/horarios/slots?fecha=${fecha}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data.cerrado) {
         setSlots([]);
+        // Si el día está cerrado, mostramos el mensaje que viene del backend
         Alert.alert('Cerrado', res.data.mensaje);
       } else {
         setSlots(res.data.slots);
       }
     } catch (e) {
-      console.log('Error', e);
+      console.log('Error cargando slots', e);
     }
-    setLoading(false);
+    setLoadingSlots(false);
   };
 
-  React.useEffect(() => {
-    cargarSlots();
-  }, []);
+  // Cargar slots cuando cambia la fecha seleccionada
+  useEffect(() => {
+    if (dateChips.length > 0) {
+      cargarSlots(dateChips[selectedDateIndex].valor);
+      setHora('');
+    }
+  }, [selectedDateIndex, dateChips]);
 
   const handleAgendar = async () => {
     if (!servicio || !hora) {
       Alert.alert('Error', 'Seleccioná un servicio y un horario.');
       return;
     }
+    const fecha = dateChips[selectedDateIndex].valor;
     setEnviando(true);
     try {
-      await axios.post(`${API_URL}/turnos`, { servicio, fecha: fechaStr, hora }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      Alert.alert('¡Éxito!', 'Turno agendado correctamente.', [
-        { text: 'OK', onPress: () => {
-            setServicio(''); setHora(''); cargarSlots();
-            navigation.navigate('Mis Turnos');
-        }}
-      ]);
+      if (isReagendar) {
+        await axios.put(`${API_URL}/turnos/${originalTurnoId}`, {
+          servicio,
+          fecha,
+          hora
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        Alert.alert('¡Éxito!', 'Turno re-agendado correctamente.', [
+          { text: 'OK', onPress: () => {
+              navigation.navigate('Mis Turnos');
+          }}
+        ]);
+      } else {
+        await axios.post(`${API_URL}/turnos`, { servicio, fecha, hora }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        Alert.alert('¡Éxito!', 'Turno agendado correctamente.', [
+          { text: 'OK', onPress: () => {
+              setServicio(''); setHora('');
+              navigation.navigate('Mis Turnos');
+          }}
+        ]);
+      }
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || 'Error al agendar');
     }
@@ -65,42 +119,73 @@ export default function AgendarScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.card}>
-        <Text style={styles.title}>1. Elegí tu servicio</Text>
-        <View style={styles.grid}>
-          {SERVICIOS.map(s => (
-            <TouchableOpacity 
-              key={s} 
-              style={[styles.serviceBtn, servicio === s && styles.serviceBtnActive]}
-              onPress={() => setServicio(s)}
-            >
-              <Text style={[styles.serviceText, servicio === s && styles.serviceTextActive]}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <Text style={styles.headerTitle}>{isReagendar ? '🔄 Re-agendar Turno' : '📅 Reservar un Turno'}</Text>
+        {isReagendar && (
+          <Text style={styles.warningText}>El turno volverá a estado pendiente hasta que sea aprobado por el peluquero.</Text>
+        )}
 
-        <Text style={styles.title}>2. Horario para mañana ({fechaStr})</Text>
-        {loading ? <ActivityIndicator color="#d4af37" /> : (
-          <View style={styles.gridSlots}>
-            {slots.map(s => (
+        <Text style={styles.title}>1. Elegí tu servicio</Text>
+        {loadingServicios ? <ActivityIndicator color={Navy.accent} /> : (
+          <View style={styles.grid}>
+            {servicios.map(s => (
               <TouchableOpacity 
-                key={s.hora} 
-                disabled={!s.disponible}
-                style={[
-                  styles.slotBtn, 
-                  !s.disponible && styles.slotBtnDisabled,
-                  hora === s.hora && styles.slotBtnActive
-                ]}
-                onPress={() => setHora(s.hora)}
+                key={s._id} 
+                style={[styles.serviceBtn, servicio === s.nombre && styles.serviceBtnActive]}
+                onPress={() => setServicio(s.nombre)}
               >
-                <Text style={[
-                  styles.slotText,
-                  !s.disponible && styles.slotTextDisabled,
-                  hora === s.hora && styles.slotTextActive
-                ]}>{s.hora}</Text>
+                <Text style={[styles.serviceText, servicio === s.nombre && styles.serviceTextActive]}>
+                  {s.nombre}
+                </Text>
+                <Text style={[styles.servicePrice, servicio === s.nombre && styles.servicePriceActive]}>
+                  ${s.precio} • {s.duracionMin} min
+                </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        <Text style={styles.title}>2. Seleccioná el día</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesContainer}>
+          {dateChips.map((chip, idx) => (
+            <TouchableOpacity
+              key={chip.valor}
+              style={[styles.dateChip, selectedDateIndex === idx && styles.dateChipActive]}
+              onPress={() => setSelectedDateIndex(idx)}
+            >
+              <Text style={[styles.dateChipText, selectedDateIndex === idx && styles.dateChipTextActive]}>
+                {chip.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <Text style={styles.title}>3. Elegí el horario</Text>
+        {loadingSlots ? <ActivityIndicator color={Navy.accent} /> : (
+          <View style={styles.gridSlots}>
+            {slots.length === 0 ? (
+              <Text style={styles.noSlotsText}>No hay horarios disponibles para esta fecha.</Text>
+            ) : (
+              slots.map(s => (
+                <TouchableOpacity 
+                  key={s.hora} 
+                  disabled={!s.disponible}
+                  style={[
+                    styles.slotBtn, 
+                    !s.disponible && styles.slotBtnDisabled,
+                    hora === s.hora && styles.slotBtnActive
+                  ]}
+                  onPress={() => setHora(s.hora)}
+                >
+                  <Text style={[
+                    styles.slotText,
+                    !s.disponible && styles.slotTextDisabled,
+                    hora === s.hora && styles.slotTextActive
+                  ]}>{s.hora}</Text>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         )}
 
@@ -109,7 +194,9 @@ export default function AgendarScreen({ navigation }) {
           disabled={!servicio || !hora || enviando}
           onPress={handleAgendar}
         >
-          {enviando ? <ActivityIndicator color="#000" /> : <Text style={styles.btnText}>AGENDAR TURNO</Text>}
+          {enviando ? <ActivityIndicator color="#060D1F" /> : (
+            <Text style={styles.btnText}>{isReagendar ? 'RE-AGENDAR AHORA' : 'AGENDAR TURNO'}</Text>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -117,21 +204,66 @@ export default function AgendarScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0b10', padding: 20 },
-  card: { backgroundColor: '#12141d', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  title: { color: '#f8f9fa', fontSize: 16, fontWeight: 'bold', marginBottom: 16, marginTop: 10 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-  serviceBtn: { backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
-  serviceBtnActive: { borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,0.1)' },
-  serviceText: { color: '#a1a1aa', fontSize: 14 },
-  serviceTextActive: { color: '#d4af37', fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: Navy.bg, padding: 20 },
+  card: {
+    backgroundColor: Navy.surface,
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Navy.border
+  },
+  headerTitle: { color: Navy.textPrimary, fontSize: 20, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' },
+  warningText: { color: Navy.warning, fontSize: 13, backgroundColor: Navy.warningBg, padding: 12, borderRadius: 8, marginBottom: 16, textAlign: 'center' },
+  title: { color: Navy.textPrimary, fontSize: 16, fontWeight: 'bold', marginBottom: 16, marginTop: 15 },
+  
+  grid: { flexDirection: 'column', gap: 10, marginBottom: 16 },
+  serviceBtn: {
+    backgroundColor: Navy.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Navy.border,
+    padding: 14,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  serviceBtnActive: { borderColor: Navy.accent, backgroundColor: 'rgba(56,189,248,0.08)' },
+  serviceText: { color: Navy.textPrimary, fontSize: 15, fontWeight: '600' },
+  serviceTextActive: { color: Navy.accent },
+  servicePrice: { color: Navy.textSecondary, fontSize: 13 },
+  servicePriceActive: { color: Navy.accent },
+
+  datesContainer: { flexDirection: 'row', marginBottom: 16 },
+  dateChip: {
+    backgroundColor: Navy.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Navy.border,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginRight: 10
+  },
+  dateChipActive: { borderColor: Navy.accent, backgroundColor: Navy.accent },
+  dateChipText: { color: Navy.textSecondary, fontSize: 14, fontWeight: '600' },
+  dateChipTextActive: { color: '#060D1F' },
+
   gridSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 },
-  slotBtn: { backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingVertical: 10, width: '31%', alignItems: 'center', borderRadius: 8 },
-  slotBtnDisabled: { opacity: 0.3, backgroundColor: 'transparent' },
-  slotBtnActive: { borderColor: '#d4af37', backgroundColor: '#d4af37' },
-  slotText: { color: '#f8f9fa', fontSize: 14, fontWeight: 'bold' },
+  slotBtn: {
+    backgroundColor: Navy.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Navy.border,
+    paddingVertical: 10,
+    width: '31%',
+    alignItems: 'center',
+    borderRadius: 8
+  },
+  slotBtnDisabled: { opacity: 0.15, backgroundColor: 'transparent' },
+  slotBtnActive: { borderColor: Navy.accent, backgroundColor: Navy.accent },
+  slotText: { color: Navy.textPrimary, fontSize: 14, fontWeight: 'bold' },
   slotTextDisabled: { textDecorationLine: 'line-through' },
-  slotTextActive: { color: '#000' },
-  btnPrimary: { backgroundColor: '#d4af37', padding: 16, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#000', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
+  slotTextActive: { color: '#060D1F' },
+  noSlotsText: { color: Navy.textSecondary, fontStyle: 'italic', width: '100%', textAlign: 'center', padding: 10 },
+
+  btnPrimary: { backgroundColor: Navy.accent, padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  btnText: { color: '#060D1F', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
 });

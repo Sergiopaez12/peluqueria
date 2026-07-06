@@ -108,3 +108,46 @@ exports.cambiarEstado = async (req, res) => {
         res.status(500).json({ message: 'Error al cambiar estado.' });
     }
 };
+
+// Re-agendar turno (cliente o admin)
+exports.reagendarTurno = async (req, res) => {
+    try {
+        const { fecha, hora } = req.body;
+        if (!fecha || !hora) {
+            return res.status(400).json({ message: 'Fecha y hora son requeridas.' });
+        }
+
+        const turno = await Turno.findById(req.params.id);
+        if (!turno) return res.status(404).json({ message: 'Turno no encontrado.' });
+
+        // Solo el dueño o admin puede modificar
+        if (turno.usuarioId.toString() !== req.usuario.id && req.usuario.rol !== 'admin') {
+            return res.status(403).json({ message: 'No tenés permiso para re-agendar este turno.' });
+        }
+
+        // Verificar si el slot de destino ya está ocupado por otro turno
+        const slotOcupado = await Turno.findOne({
+            fecha,
+            hora,
+            estado: { $in: ['pendiente', 'confirmado'] },
+            _id: { $ne: turno._id }
+        });
+        if (slotOcupado) {
+            return res.status(400).json({ message: 'El horario seleccionado ya no está disponible.' });
+        }
+
+        turno.fecha = fecha;
+        turno.hora = hora;
+        
+        // Si lo edita el cliente, vuelve a estado 'pendiente' para que el admin lo apruebe
+        if (req.usuario.rol !== 'admin') {
+            turno.estado = 'pendiente';
+        }
+
+        await turno.save();
+        res.json(turno);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al re-agendar el turno.' });
+    }
+};

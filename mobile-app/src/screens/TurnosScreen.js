@@ -1,13 +1,18 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
+import { Navy } from '../constants/theme';
 import { API_URL } from '../config/api';
 
-export default function TurnosScreen() {
+export default function TurnosScreen({ navigation }) {
   const { token } = useContext(AuthContext);
   const [turnos, setTurnos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState('todos'); // 'todos' | 'pendiente' | 'confirmado'
+  
+  const isFocused = useIsFocused();
 
   const cargarTurnos = async () => {
     try {
@@ -22,17 +27,20 @@ export default function TurnosScreen() {
   };
 
   useEffect(() => {
-    cargarTurnos();
-  }, []);
+    if (isFocused) {
+      cargarTurnos();
+    }
+  }, [isFocused]);
 
   const handleCancelar = (id) => {
     Alert.alert('Cancelar Turno', '¿Estás seguro que querés cancelar este turno?', [
       { text: 'No', style: 'cancel' },
       { text: 'Sí, cancelar', onPress: async () => {
         try {
-          await axios.delete(`${API_URL}/turnos/${id}`, {
+          const res = await axios.delete(`${API_URL}/turnos/${id}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
+          Alert.alert('¡Éxito!', res.data.message || 'Turno cancelado.');
           cargarTurnos();
         } catch (err) {
           Alert.alert('Error', err.response?.data?.message || 'Error al cancelar');
@@ -41,23 +49,60 @@ export default function TurnosScreen() {
     ]);
   };
 
+  const filteredTurnos = turnos.filter(t => {
+    if (filtro === 'todos') return true;
+    return t.estado === filtro;
+  });
+
   const renderItem = ({ item }) => {
     const isConfirmado = item.estado === 'confirmado';
     const isRechazado = item.estado === 'rechazado';
+    const isPendiente = item.estado === 'pendiente';
     
+    // Parse date parts
+    const dateParts = item.fecha.split('-');
+    const day = dateParts[2] || '';
+    const month = dateParts[1] || '';
+
     return (
       <View style={styles.card}>
         <View style={styles.dateBlock}>
-          <Text style={styles.day}>{item.fecha.split('-')[2]}</Text>
-          <Text style={styles.month}>{item.fecha.split('-')[1]}</Text>
+          <Text style={styles.day}>{day}</Text>
+          <Text style={styles.month}>{month}</Text>
         </View>
         <View style={styles.infoBlock}>
           <Text style={styles.service}>{item.servicio}</Text>
           <Text style={styles.time}>🕐 {item.hora} hs</Text>
-          <View style={[styles.badge, isConfirmado ? styles.badgeGreen : isRechazado ? styles.badgeRed : styles.badgeYellow]}>
-            <Text style={[styles.badgeText, isConfirmado ? styles.badgeTextGreen : isRechazado ? styles.badgeTextRed : styles.badgeTextYellow]}>
+          <View style={[
+            styles.badge, 
+            isConfirmado ? styles.badgeGreen : isRechazado ? styles.badgeRed : styles.badgeYellow
+          ]}>
+            <Text style={[
+              styles.badgeText, 
+              isConfirmado ? styles.badgeTextGreen : isRechazado ? styles.badgeTextRed : styles.badgeTextYellow
+            ]}>
               {isConfirmado ? '✅ Confirmado' : isRechazado ? '❌ Rechazado' : '⏳ Pendiente'}
             </Text>
+          </View>
+
+          <View style={styles.actionsContainer}>
+            {isConfirmado && (
+              <TouchableOpacity
+                style={styles.actionBtnSmall}
+                onPress={() => navigation.navigate('Reseñas', { turnoId: item._id, servicio: item.servicio })}
+              >
+                <Text style={styles.actionBtnSmallText}>⭐ Calificar</Text>
+              </TouchableOpacity>
+            )}
+
+            {(isConfirmado || isPendiente) && (
+              <TouchableOpacity
+                style={[styles.actionBtnSmall, { borderColor: Navy.accent }]}
+                onPress={() => navigation.navigate('Agendar', { reagendarTurnoId: item._id, servicioInicial: item.servicio })}
+              >
+                <Text style={[styles.actionBtnSmallText, { color: Navy.accent }]}>🔄 Re-agendar</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         {!isRechazado && (
@@ -71,16 +116,31 @@ export default function TurnosScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Filtros */}
+      <View style={styles.filterBar}>
+        {['todos', 'pendiente', 'confirmado'].map(f => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.filterPill, filtro === f && styles.filterPillActive]}
+            onPress={() => setFiltro(f)}
+          >
+            <Text style={[styles.filterText, filtro === f && styles.filterTextActive]}>
+              {f === 'todos' ? 'Todos' : f === 'pendiente' ? 'Pendientes' : 'Confirmados'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {loading ? (
-        <ActivityIndicator color="#d4af37" size="large" style={{ marginTop: 40 }} />
-      ) : turnos.length === 0 ? (
+        <ActivityIndicator color={Navy.accent} size="large" style={{ marginTop: 40 }} />
+      ) : filteredTurnos.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📭</Text>
-          <Text style={styles.emptyText}>Todavía no tenés turnos agendados.</Text>
+          <Text style={styles.emptyText}>No hay turnos para mostrar.</Text>
         </View>
       ) : (
         <FlatList
-          data={turnos}
+          data={filteredTurnos}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
@@ -93,47 +153,87 @@ export default function TurnosScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0b10' },
+  container: { flex: 1, backgroundColor: Navy.bg },
+  filterBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 16,
+    paddingHorizontal: 20
+  },
+  filterPill: {
+    backgroundColor: Navy.surfaceAlt,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Navy.border
+  },
+  filterPillActive: {
+    backgroundColor: Navy.accent,
+    borderColor: Navy.accent
+  },
+  filterText: {
+    color: Navy.textSecondary,
+    fontSize: 13,
+    fontWeight: 'bold',
+    textTransform: 'capitalize'
+  },
+  filterTextActive: {
+    color: '#060D1F'
+  },
   list: { padding: 20 },
   card: {
-    backgroundColor: '#12141d',
+    backgroundColor: Navy.surface,
     flexDirection: 'row',
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: Navy.border,
     borderLeftWidth: 3,
-    borderLeftColor: '#d4af37',
+    borderLeftColor: Navy.accent,
     alignItems: 'center'
   },
   dateBlock: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: Navy.surfaceAlt,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginRight: 16,
     minWidth: 60,
   },
-  day: { color: '#d4af37', fontSize: 24, fontWeight: 'bold' },
-  month: { color: '#a1a1aa', fontSize: 12, textTransform: 'uppercase', marginTop: 4 },
+  day: { color: Navy.accent, fontSize: 24, fontWeight: 'bold' },
+  month: { color: Navy.textSecondary, fontSize: 12, textTransform: 'uppercase', marginTop: 4 },
   infoBlock: { flex: 1 },
-  service: { color: '#f8f9fa', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-  time: { color: '#a1a1aa', fontSize: 14, marginBottom: 8 },
+  service: { color: Navy.textPrimary, fontSize: 17, fontWeight: 'bold', marginBottom: 4 },
+  time: { color: Navy.textSecondary, fontSize: 14, marginBottom: 8 },
   badge: {
     alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, borderWidth: 1
   },
-  badgeYellow: { backgroundColor: 'rgba(212,175,55,0.1)', borderColor: 'rgba(212,175,55,0.2)' },
-  badgeTextYellow: { color: '#d4af37', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-  badgeGreen: { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.2)' },
-  badgeTextGreen: { color: '#10b981', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-  badgeRed: { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.2)' },
-  badgeTextRed: { color: '#ef4444', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  badgeYellow: { backgroundColor: Navy.warningBg, borderColor: 'rgba(251,191,36,0.2)' },
+  badgeTextYellow: { color: Navy.warning, fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  badgeGreen: { backgroundColor: Navy.successBg, borderColor: 'rgba(16,185,129,0.2)' },
+  badgeTextGreen: { color: Navy.success, fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  badgeRed: { backgroundColor: Navy.errorBg, borderColor: 'rgba(248,113,113,0.2)' },
+  badgeTextRed: { color: Navy.error, fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  
+  actionsContainer: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  actionBtnSmall: {
+    borderWidth: 1,
+    borderColor: Navy.success,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: 'transparent'
+  },
+  actionBtnSmallText: { color: Navy.success, fontSize: 12, fontWeight: 'bold' },
+
   btnCancel: {
     padding: 8,
   },
-  btnCancelText: { color: '#ef4444', fontSize: 18, fontWeight: 'bold' },
+  btnCancelText: { color: Navy.error, fontSize: 18, fontWeight: 'bold' },
   emptyState: { alignItems: 'center', marginTop: 80 },
   emptyIcon: { fontSize: 64, opacity: 0.5 },
-  emptyText: { color: '#a1a1aa', fontSize: 16, marginTop: 16 }
+  emptyText: { color: Navy.textSecondary, fontSize: 16, marginTop: 16 }
 });

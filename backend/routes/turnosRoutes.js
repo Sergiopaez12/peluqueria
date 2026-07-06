@@ -7,5 +7,6 @@ router.get('/',             verificarToken,            turnoController.obtenerTu
 router.post('/',            verificarToken,            turnoController.crearTurno);
 router.delete('/:id',       verificarToken,            turnoController.eliminarTurno);
 router.patch('/:id/estado', verificarToken, soloAdmin, turnoController.cambiarEstado);
+router.put('/:id',            verificarToken,            turnoController.reagendarTurno);
 
 module.exports = router;

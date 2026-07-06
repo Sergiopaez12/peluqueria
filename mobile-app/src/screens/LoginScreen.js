@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import { Navy } from '../constants/theme';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -38,7 +39,7 @@ export default function LoginScreen({ navigation }) {
           <TextInput
             style={styles.input}
             placeholder="tucorreo@ejemplo.com"
-            placeholderTextColor="#71717a"
+            placeholderTextColor="#4e6585"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -51,7 +52,7 @@ export default function LoginScreen({ navigation }) {
           <TextInput
             style={styles.input}
             placeholder="••••••••"
-            placeholderTextColor="#71717a"
+            placeholderTextColor="#4e6585"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -59,7 +60,7 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.btnText}>INGRESAR</Text>}
+          {loading ? <ActivityIndicator color="#060D1F" /> : <Text style={styles.btnText}>INGRESAR</Text>}
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -76,18 +77,18 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0b10', // Midnight
+    backgroundColor: Navy.bg,
     justifyContent: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#12141d',
+    backgroundColor: Navy.surface,
     padding: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.15)',
+    borderColor: Navy.border,
     borderTopWidth: 3,
-    borderTopColor: '#d4af37', // Gold accent
+    borderTopColor: Navy.accent,
   },
   logoIcon: {
     fontSize: 48,
@@ -97,13 +98,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#f8f9fa',
+    color: Navy.textPrimary,
     textAlign: 'center',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#d4af37',
+    color: Navy.accent,
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -113,37 +114,37 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    color: '#a1a1aa',
+    color: Navy.textSecondary,
     fontSize: 12,
     textTransform: 'uppercase',
     fontWeight: '600',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: Navy.surfaceAlt,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: Navy.border,
     borderRadius: 8,
     padding: 14,
-    color: '#f8f9fa',
+    color: Navy.textPrimary,
     fontSize: 15,
   },
   btnPrimary: {
-    backgroundColor: '#d4af37',
+    backgroundColor: Navy.accent,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
   btnText: {
-    color: '#000',
+    color: '#060D1F',
     fontWeight: 'bold',
     fontSize: 14,
     letterSpacing: 1,
   },
   errorText: {
-    color: '#fca5a5',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    color: Navy.error,
+    backgroundColor: Navy.errorBg,
     padding: 12,
     borderRadius: 6,
     marginBottom: 20,
@@ -157,11 +158,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerText: {
-    color: '#71717a',
+    color: Navy.textMuted,
     fontSize: 13,
   },
   footerLink: {
-    color: '#d4af37',
+    color: Navy.accent,
     fontSize: 13,
     fontWeight: 'bold',
     textTransform: 'uppercase',

@@ -1,6 +1,6 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Paleta: Azul Marino Elegante
+ * Fondo oscuro azul profundo, acentos en celeste y blanco.
  */
 
 import '@/global.css';
@@ -11,30 +11,56 @@ export const Colors = {
   light: {
     text: '#000000',
     background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    backgroundElement: '#EFF4FB',
+    backgroundSelected: '#D6E4F7',
+    textSecondary: '#4A6080',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#E8F0FE',
+    background: '#060D1F',
+    backgroundElement: '#0D1B35',
+    backgroundSelected: '#172D50',
+    textSecondary: '#7A9CC6',
   },
+} as const;
+
+// Paleta centralizada azul marino
+export const Navy = {
+  // Fondos
+  bg: '#060D1F',           // Fondo principal — azul medianoche
+  surface: '#0D1B35',      // Cards / superficies
+  surfaceAlt: '#112040',   // Inputs / elementos secundarios
+
+  // Acentos
+  accent: '#38BDF8',       // Celeste brillante (sky-400)
+  accentDark: '#0EA5E9',   // Celeste más profundo (sky-500)
+  accentGlow: 'rgba(56,189,248,0.15)', // Brillo del acento
+
+  // Texto
+  textPrimary: '#E8F0FE',  // Blanco azulado
+  textSecondary: '#7A9CC6',// Gris azulado
+  textMuted: '#3D5A80',    // Texto muy apagado
+
+  // Bordes
+  border: 'rgba(56,189,248,0.12)',
+  borderAccent: 'rgba(56,189,248,0.4)',
+
+  // Estados
+  success: '#10b981',
+  successBg: 'rgba(16,185,129,0.1)',
+  error: '#f87171',
+  errorBg: 'rgba(248,113,113,0.1)',
+  warning: '#fbbf24',
+  warningBg: 'rgba(251,191,36,0.1)',
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {

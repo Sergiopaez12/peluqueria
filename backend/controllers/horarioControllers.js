@@ -1,5 +1,6 @@
 const HorarioConfig = require('../models/HorarioConfig');
 const Turno = require('../models/Turno');
+const DiaBloqueado = require('../models/DiaBloqueado');
 
 const DIAS_NOMBRES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -57,6 +58,12 @@ exports.getSlots = async (req, res) => {
         const { fecha } = req.query;
         if (!fecha) return res.status(400).json({ message: 'Fecha requerida.' });
 
+        // Verificar si el día está bloqueado
+        const diaBloqueado = await DiaBloqueado.findOne({ fecha });
+        if (diaBloqueado) {
+            return res.json({ slots: [], cerrado: true, mensaje: diaBloqueado.motivo || 'Este día está cerrado.' });
+        }
+
         const [y, m, d] = fecha.split('-').map(Number);
         const fechaObj  = new Date(y, m - 1, d);
         const diaSemana = fechaObj.getDay();
@@ -105,5 +112,44 @@ exports.getSlots = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error al calcular slots.' });
+    }
+};
+
+// GET /api/horarios/bloqueados
+exports.getDiasBloqueados = async (req, res) => {
+    try {
+        const bloqueados = await DiaBloqueado.find().sort({ fecha: 1 });
+        res.json(bloqueados);
+    } catch (error) {
+        res.status(500).json({ message: 'Error al obtener días bloqueados.' });
+    }
+};
+
+// POST /api/horarios/bloqueados
+exports.bloquearDia = async (req, res) => {
+    try {
+        const { fecha, motivo } = req.body;
+        if (!fecha) return res.status(400).json({ message: 'Fecha requerida.' });
+
+        const nuevoBloqueo = await DiaBloqueado.findOneAndUpdate(
+            { fecha },
+            { fecha, motivo },
+            { upsert: true, new: true }
+        );
+        res.status(201).json(nuevoBloqueo);
+    } catch (error) {
+        res.status(400).json({ message: 'Error al bloquear día.' });
+    }
+};
+
+// DELETE /api/horarios/bloqueados/:id
+exports.desbloquearDia = async (req, res) => {
+    try {
+        const bloqueo = await DiaBloqueado.findById(req.params.id);
+        if (!bloqueo) return res.status(404).json({ message: 'Bloqueo no encontrado.' });
+        await bloqueo.deleteOne();
+        res.json({ message: 'Día desbloqueado correctamente.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error al desbloquear día.' });
     }
 };

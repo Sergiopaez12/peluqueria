@@ -10,4 +10,9 @@ router.get('/slots',  verificarToken, horarioController.getSlots);
 router.get('/config',  verificarToken, soloAdmin, horarioController.getConfig);
 router.put('/config',  verificarToken, soloAdmin, horarioController.updateConfig);
 
+// Días bloqueados
+router.get('/bloqueados', verificarToken, horarioController.getDiasBloqueados);
+router.post('/bloqueados', verificarToken, soloAdmin, horarioController.bloquearDia);
+router.delete('/bloqueados/:id', verificarToken, soloAdmin, horarioController.desbloquearDia);
+
 module.exports = router;
