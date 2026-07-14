@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { Navy } from '../constants/theme';
@@ -13,10 +13,16 @@ export default function AgendarScreen({ navigation, route }) {
 
   const [servicios, setServicios] = useState([]);
   const [servicio, setServicio] = useState(params.servicioInicial || '');
-  
-  // Date chips generation: Hoy, Mañana, Pasado Mañana, En 3 días
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [dateChips, setDateChips] = useState([]);
+
+  // Estado del Calendario Mensual
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
 
   const [hora, setHora] = useState('');
   const [slots, setSlots] = useState([]);
@@ -25,18 +31,6 @@ export default function AgendarScreen({ navigation, route }) {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    // Generate dates
-    const chips = [];
-    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    for (let i = 0; i < 4; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${diasSemana[d.getDay()]} ${d.getDate()}`;
-      const valor = d.toISOString().split('T')[0];
-      chips.push({ label, valor });
-    }
-    setDateChips(chips);
-
     cargarServicios();
   }, []);
 
@@ -61,8 +55,8 @@ export default function AgendarScreen({ navigation, route }) {
       });
       if (res.data.cerrado) {
         setSlots([]);
-        // Si el día está cerrado, mostramos el mensaje que viene del backend
-        Alert.alert('Cerrado', res.data.mensaje);
+        if (Platform.OS === 'web') window.alert(`Cerrado: ${res.data.mensaje}`);
+        else Alert.alert('Cerrado', res.data.mensaje);
       } else {
         setSlots(res.data.slots);
       }
@@ -72,48 +66,88 @@ export default function AgendarScreen({ navigation, route }) {
     setLoadingSlots(false);
   };
 
-  // Cargar slots cuando cambia la fecha seleccionada
+  // Cargar slots automáticamente cuando cambia la fecha seleccionada en el calendario
   useEffect(() => {
-    if (dateChips.length > 0) {
-      cargarSlots(dateChips[selectedDateIndex].valor);
+    if (selectedDate) {
+      cargarSlots(selectedDate);
       setHora('');
     }
-  }, [selectedDateIndex, dateChips]);
+  }, [selectedDate]);
+
+  // Funciones de ayuda para generar la grilla del calendario mensual
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+
+  const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const diasCortos = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
+
+  const generarGridCalendario = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const totalDays = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    const celdas = [];
+    for (let i = 0; i < firstDay; i++) {
+      celdas.push({ empty: true, key: `empty-${i}` });
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      const yyyy = year;
+      const mm = String(month + 1).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const isPast = dateStr < todayStr;
+
+      celdas.push({
+        empty: false,
+        day: d,
+        dateStr,
+        isPast,
+        isSelected: dateStr === selectedDate,
+        isToday: dateStr === todayStr,
+        key: dateStr
+      });
+    }
+    return celdas;
+  };
 
   const handleAgendar = async () => {
     if (!servicio || !hora) {
-      Alert.alert('Error', 'Seleccioná un servicio y un horario.');
+      if (Platform.OS === 'web') window.alert('Seleccioná un servicio y un horario.');
+      else Alert.alert('Error', 'Seleccioná un servicio y un horario.');
       return;
     }
-    const fecha = dateChips[selectedDateIndex].valor;
     setEnviando(true);
     try {
       if (isReagendar) {
         await axios.put(`${API_URL}/turnos/${originalTurnoId}`, {
           servicio,
-          fecha,
+          fecha: selectedDate,
           hora
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        Alert.alert('¡Éxito!', 'Turno re-agendado correctamente.', [
-          { text: 'OK', onPress: () => {
-              navigation.navigate('Mis Turnos');
-          }}
-        ]);
+        const msj = 'Turno re-agendado correctamente.';
+        if (Platform.OS === 'web') window.alert(`¡Éxito! ${msj}`);
+        else Alert.alert('¡Éxito!', msj);
+        navigation.navigate('Mis Turnos');
       } else {
-        await axios.post(`${API_URL}/turnos`, { servicio, fecha, hora }, {
+        await axios.post(`${API_URL}/turnos`, { servicio, fecha: selectedDate, hora }, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        Alert.alert('¡Éxito!', 'Turno agendado correctamente.', [
-          { text: 'OK', onPress: () => {
-              setServicio(''); setHora('');
-              navigation.navigate('Mis Turnos');
-          }}
-        ]);
+        const msj = 'Turno agendado correctamente.';
+        if (Platform.OS === 'web') window.alert(`¡Éxito! ${msj}`);
+        else Alert.alert('¡Éxito!', msj);
+        setServicio(''); setHora('');
+        navigation.navigate('Mis Turnos');
       }
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message || 'Error al agendar');
+      const msjErr = err.response?.data?.message || 'Error al agendar';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
     }
     setEnviando(false);
   };
@@ -146,26 +180,81 @@ export default function AgendarScreen({ navigation, route }) {
           </View>
         )}
 
-        <Text style={styles.title}>2. Seleccioná el día</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesContainer}>
-          {dateChips.map((chip, idx) => (
+        <Text style={styles.title}>2. Seleccioná el día ({selectedDate})</Text>
+        
+        {/* Calendario Interactivo */}
+        <View style={styles.calendarContainer}>
+          <View style={styles.calendarHeader}>
             <TouchableOpacity
-              key={chip.valor}
-              style={[styles.dateChip, selectedDateIndex === idx && styles.dateChipActive]}
-              onPress={() => setSelectedDateIndex(idx)}
+              style={styles.calendarNavBtn}
+              onPress={() => {
+                const prev = new Date(currentMonth);
+                prev.setMonth(prev.getMonth() - 1);
+                const hoy = new Date();
+                if (prev.getFullYear() >= hoy.getFullYear() && prev.getMonth() >= hoy.getMonth()) {
+                  setCurrentMonth(prev);
+                }
+              }}
             >
-              <Text style={[styles.dateChipText, selectedDateIndex === idx && styles.dateChipTextActive]}>
-                {chip.label}
-              </Text>
+              <Text style={styles.calendarNavText}>◄</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            
+            <Text style={styles.calendarMonthTitle}>
+              {nombresMeses[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </Text>
 
-        <Text style={styles.title}>3. Elegí el horario</Text>
+            <TouchableOpacity
+              style={styles.calendarNavBtn}
+              onPress={() => {
+                const next = new Date(currentMonth);
+                next.setMonth(next.getMonth() + 1);
+                setCurrentMonth(next);
+              }}
+            >
+              <Text style={styles.calendarNavText}>►</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.daysHeaderRow}>
+            {diasCortos.map((dia, index) => (
+              <Text key={index} style={styles.dayHeaderText}>{dia}</Text>
+            ))}
+          </View>
+
+          <View style={styles.calendarGrid}>
+            {generarGridCalendario().map(item => {
+              if (item.empty) {
+                return <View key={item.key} style={styles.calendarDayEmpty} />;
+              }
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  disabled={item.isPast}
+                  style={[
+                    styles.calendarDayBtn,
+                    item.isToday && styles.calendarDayToday,
+                    item.isSelected && styles.calendarDaySelected,
+                    item.isPast && styles.calendarDayPast
+                  ]}
+                  onPress={() => setSelectedDate(item.dateStr)}
+                >
+                  <Text style={[
+                    styles.calendarDayText,
+                    item.isToday && styles.calendarDayTextToday,
+                    item.isSelected && styles.calendarDayTextSelected,
+                    item.isPast && styles.calendarDayTextPast
+                  ]}>{item.day}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <Text style={styles.title}>3. Elegí el horario ({selectedDate})</Text>
         {loadingSlots ? <ActivityIndicator color={Navy.accent} /> : (
           <View style={styles.gridSlots}>
             {slots.length === 0 ? (
-              <Text style={styles.noSlotsText}>No hay horarios disponibles para esta fecha.</Text>
+              <Text style={styles.noSlotsText}>No hay horarios disponibles para esta fecha o la barbería está cerrada.</Text>
             ) : (
               slots.map(s => (
                 <TouchableOpacity 
@@ -233,19 +322,59 @@ const styles = StyleSheet.create({
   servicePrice: { color: Navy.textSecondary, fontSize: 13 },
   servicePriceActive: { color: Navy.accent },
 
-  datesContainer: { flexDirection: 'row', marginBottom: 16 },
-  dateChip: {
+  /* Estilos del Calendario Mensual */
+  calendarContainer: {
     backgroundColor: Navy.surfaceAlt,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Navy.border,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginRight: 10
+    padding: 16,
+    marginBottom: 20
   },
-  dateChipActive: { borderColor: Navy.accent, backgroundColor: Navy.accent },
-  dateChipText: { color: Navy.textSecondary, fontSize: 14, fontWeight: '600' },
-  dateChipTextActive: { color: '#060D1F' },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  calendarNavBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(56,189,248,0.1)',
+    borderRadius: 6
+  },
+  calendarNavText: { color: Navy.accent, fontSize: 16, fontWeight: 'bold' },
+  calendarMonthTitle: { color: Navy.textPrimary, fontSize: 16, fontWeight: 'bold', textTransform: 'capitalize' },
+  daysHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 6
+  },
+  dayHeaderText: { color: Navy.textSecondary, width: '14%', textAlign: 'center', fontWeight: 'bold', fontSize: 13 },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start'
+  },
+  calendarDayEmpty: { width: '14.28%', height: 40 },
+  calendarDayBtn: {
+    width: '14.28%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    marginVertical: 2
+  },
+  calendarDayToday: { borderWidth: 1, borderColor: Navy.accent },
+  calendarDaySelected: { backgroundColor: Navy.accent },
+  calendarDayPast: { opacity: 0.25 },
+  calendarDayText: { color: Navy.textPrimary, fontSize: 14, fontWeight: '500' },
+  calendarDayTextToday: { color: Navy.accent, fontWeight: 'bold' },
+  calendarDayTextSelected: { color: '#060D1F', fontWeight: 'bold' },
+  calendarDayTextPast: { textDecorationLine: 'line-through' },
 
   gridSlots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 },
   slotBtn: {

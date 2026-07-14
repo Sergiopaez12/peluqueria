@@ -46,13 +46,15 @@ exports.eliminarTurno = async (req, res) => {
         const turno = await Turno.findById(req.params.id);
         if (!turno) return res.status(404).json({ message: 'Turno no encontrado.' });
 
-        // Solo el dueño o admin puede eliminar
-        if (turno.usuarioId.toString() !== req.usuario.id && req.usuario.rol !== 'admin') {
+        // Solo el dueño o admin puede eliminar (y prevenir crash si usuarioId es null en turnos viejos)
+        const esAdmin = req.usuario.rol === 'admin';
+        const esDueno = turno.usuarioId && turno.usuarioId.toString() === req.usuario.id;
+        if (!esAdmin && !esDueno) {
             return res.status(403).json({ message: 'No tenés permiso para cancelar este turno.' });
         }
 
         // Validar anticipación mínima de 2hs (solo para clientes, admin puede siempre)
-        if (req.usuario.rol !== 'admin') {
+        if (!esAdmin) {
             const [y, m, d] = turno.fecha.split('-').map(Number);
             const [h, min]  = turno.hora.split(':').map(Number);
             const fechaTurno = new Date(y, m - 1, d, h, min, 0);
@@ -70,7 +72,7 @@ exports.eliminarTurno = async (req, res) => {
         await turno.deleteOne();
         res.json({ message: 'Turno cancelado correctamente.' });
     } catch (error) {
-        console.error(error);
+        console.error('Error al eliminar turno:', error);
         res.status(500).json({ message: 'Error al eliminar el turno.' });
     }
 };
@@ -121,7 +123,9 @@ exports.reagendarTurno = async (req, res) => {
         if (!turno) return res.status(404).json({ message: 'Turno no encontrado.' });
 
         // Solo el dueño o admin puede modificar
-        if (turno.usuarioId.toString() !== req.usuario.id && req.usuario.rol !== 'admin') {
+        const esAdmin = req.usuario.rol === 'admin';
+        const esDueno = turno.usuarioId && turno.usuarioId.toString() === req.usuario.id;
+        if (!esAdmin && !esDueno) {
             return res.status(403).json({ message: 'No tenés permiso para re-agendar este turno.' });
         }
 

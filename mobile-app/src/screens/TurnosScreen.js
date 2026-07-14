@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -32,21 +32,32 @@ export default function TurnosScreen({ navigation }) {
     }
   }, [isFocused]);
 
+  const ejecutarCancelar = async (id) => {
+    try {
+      const res = await axios.delete(`${API_URL}/turnos/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const msj = res.data.message || 'Turno cancelado.';
+      if (Platform.OS === 'web') window.alert(`¡Éxito! ${msj}`);
+      else Alert.alert('¡Éxito!', msj);
+      cargarTurnos();
+    } catch (err) {
+      const msjErr = err.response?.data?.message || 'Error al cancelar';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
+    }
+  };
+
   const handleCancelar = (id) => {
-    Alert.alert('Cancelar Turno', '¿Estás seguro que querés cancelar este turno?', [
-      { text: 'No', style: 'cancel' },
-      { text: 'Sí, cancelar', onPress: async () => {
-        try {
-          const res = await axios.delete(`${API_URL}/turnos/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          Alert.alert('¡Éxito!', res.data.message || 'Turno cancelado.');
-          cargarTurnos();
-        } catch (err) {
-          Alert.alert('Error', err.response?.data?.message || 'Error al cancelar');
-        }
-      }, style: 'destructive' }
-    ]);
+    if (Platform.OS === 'web') {
+      const ok = window.confirm('¿Estás seguro que querés cancelar este turno?');
+      if (ok) ejecutarCancelar(id);
+    } else {
+      Alert.alert('Cancelar Turno', '¿Estás seguro que querés cancelar este turno?', [
+        { text: 'No', style: 'cancel' },
+        { text: 'Sí, cancelar', onPress: () => ejecutarCancelar(id), style: 'destructive' }
+      ]);
+    }
   };
 
   const filteredTurnos = turnos.filter(t => {

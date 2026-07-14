@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -114,21 +114,30 @@ export default function AdminHorariosScreen() {
     setBloqueando(false);
   };
 
+  const ejecutarDesbloquearDia = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/horarios/bloqueados/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Platform.OS === 'web') window.alert('¡Éxito! Día habilitado nuevamente.');
+      else Alert.alert('¡Éxito!', 'Día habilitado nuevamente.');
+      cargarDatos();
+    } catch (e) {
+      if (Platform.OS === 'web') window.alert('Error: No se pudo habilitar el día.');
+      else Alert.alert('Error', 'No se pudo habilitar el día.');
+    }
+  };
+
   const handleDesbloquearDia = (id, fecha) => {
-    Alert.alert('Desbloquear Día', `¿Querés volver a habilitar el día ${fecha}?`, [
-      { text: 'No', style: 'cancel' },
-      { text: 'Habilitar', onPress: async () => {
-        try {
-          await axios.delete(`${API_URL}/horarios/bloqueados/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          Alert.alert('¡Éxito!', 'Día habilitado nuevamente.');
-          cargarDatos();
-        } catch (e) {
-          Alert.alert('Error', 'No se pudo habilitar el día.');
-        }
-      }}
-    ]);
+    if (Platform.OS === 'web') {
+      const ok = window.confirm(`¿Querés volver a habilitar el día ${fecha}?`);
+      if (ok) ejecutarDesbloquearDia(id);
+    } else {
+      Alert.alert('Desbloquear Día', `¿Querés volver a habilitar el día ${fecha}?`, [
+        { text: 'No', style: 'cancel' },
+        { text: 'Habilitar', onPress: () => ejecutarDesbloquearDia(id) }
+      ]);
+    }
   };
 
   if (loading) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -32,25 +32,35 @@ export default function AdminClientesScreen() {
     }
   }, [isFocused]);
 
+  const ejecutarEliminarCliente = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/auth/clientes/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Platform.OS === 'web') window.alert('¡Éxito! Cliente eliminado del sistema.');
+      else Alert.alert('¡Éxito!', 'Cliente eliminado del sistema.');
+      cargarClientes();
+    } catch (e) {
+      const msjErr = e.response?.data?.message || 'No se pudo eliminar el cliente.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
+    }
+  };
+
   const handleEliminarCliente = (id, nombre) => {
-    Alert.alert(
-      'Eliminar Cliente',
-      `¿Estás seguro de que querés eliminar a ${nombre}? Esto borrará también todos sus turnos asociados de forma definitiva.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar Cliente', onPress: async () => {
-          try {
-            await axios.delete(`${API_URL}/auth/clientes/${id}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            Alert.alert('¡Éxito!', 'Cliente eliminado del sistema.');
-            cargarClientes();
-          } catch (e) {
-            Alert.alert('Error', e.response?.data?.message || 'No se pudo eliminar el cliente.');
-          }
-        }, style: 'destructive' }
-      ]
-    );
+    if (Platform.OS === 'web') {
+      const ok = window.confirm(`¿Estás seguro de que querés eliminar a ${nombre}? Esto borrará también todos sus turnos asociados de forma definitiva.`);
+      if (ok) ejecutarEliminarCliente(id);
+    } else {
+      Alert.alert(
+        'Eliminar Cliente',
+        `¿Estás seguro de que querés eliminar a ${nombre}? Esto borrará también todos sus turnos asociados de forma definitiva.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Eliminar Cliente', onPress: () => ejecutarEliminarCliente(id), style: 'destructive' }
+        ]
+      );
+    }
   };
 
   const filteredClientes = clientes.filter(c => {

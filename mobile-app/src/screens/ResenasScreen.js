@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { Navy } from '../constants/theme';
@@ -14,6 +14,7 @@ export default function ResenasScreen({ route, navigation }) {
   const [resenas, setResenas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [promedio, setPromedio] = useState(0);
+  const [misTurnos, setMisTurnos] = useState([]);
 
   // Form states
   const [turnoId, setTurnoId] = useState(initialTurnoId);
@@ -21,7 +22,7 @@ export default function ResenasScreen({ route, navigation }) {
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  const cargarResenas = async () => {
+  const cargarResenasYTurnos = async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API_URL}/resenas`, {
@@ -29,26 +30,34 @@ export default function ResenasScreen({ route, navigation }) {
       });
       setResenas(res.data);
       
-      // Calcular promedio
       if (res.data.length > 0) {
         const suma = res.data.reduce((acc, curr) => acc + curr.puntuacion, 0);
         setPromedio((suma / res.data.length).toFixed(1));
       } else {
         setPromedio(0);
       }
+
+      // Cargar mis turnos confirmados por si entra a calificar directo desde la barra inferior
+      const resTurnos = await axios.get(`${API_URL}/turnos`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Filtrar turnos confirmados
+      const confirmados = resTurnos.data.filter(t => t.estado === 'confirmado' || t.confirmado === true);
+      setMisTurnos(confirmados);
     } catch (e) {
-      console.log('Error cargando reseñas', e);
+      console.log('Error cargando reseñas o turnos', e);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    cargarResenas();
+    cargarResenasYTurnos();
   }, []);
 
   const handleEnviarResena = async () => {
     if (!turnoId) {
-      Alert.alert('Error', 'No se ha seleccionado ningún turno para calificar.');
+      if (Platform.OS === 'web') window.alert('Error: No se ha seleccionado ningún turno para calificar.');
+      else Alert.alert('Error', 'No se ha seleccionado ningún turno para calificar.');
       return;
     }
     setEnviando(true);
@@ -60,12 +69,16 @@ export default function ResenasScreen({ route, navigation }) {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      Alert.alert('¡Gracias!', 'Tu reseña fue publicada con éxito.');
+      const msj = 'Tu reseña fue publicada con éxito.';
+      if (Platform.OS === 'web') window.alert(`¡Gracias! ${msj}`);
+      else Alert.alert('¡Gracias!', msj);
       setComentario('');
       setTurnoId(null);
-      cargarResenas();
+      cargarResenasYTurnos();
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'No se pudo enviar la reseña.');
+      const msjErr = error.response?.data?.message || 'No se pudo enviar la reseña.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
     }
     setEnviando(false);
   };
@@ -133,10 +146,37 @@ export default function ResenasScreen({ route, navigation }) {
                 <Text style={styles.statsSubtitle}>{resenas.length} valoraciones en total</Text>
               </View>
 
-              {/* Formulario para dejar reseña si viene con turnoId */}
+              {/* Selector si entra directo y tiene turnos confirmados para calificar */}
+              {!turnoId && misTurnos.length > 0 && (
+                <View style={styles.formCard}>
+                  <Text style={styles.formTitle}>Elegí cuál de tus turnos completados querés calificar:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10 }}>
+                    {misTurnos.map((t) => (
+                      <TouchableOpacity
+                        key={t._id}
+                        style={styles.turnoChip}
+                        onPress={() => setTurnoId(t._id)}
+                      >
+                        <Text style={styles.turnoChipText}>
+                          ✂️ {t.servicio} • {t.fecha}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Formulario para dejar reseña si hay turnoId seleccionado */}
               {turnoId && (
                 <View style={styles.formCard}>
-                  <Text style={styles.formTitle}>Calificá tu turno de {initialServicio}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={[styles.formTitle, { marginBottom: 0 }]}>Calificando turno seleccionado</Text>
+                    {!initialTurnoId && (
+                      <TouchableOpacity onPress={() => setTurnoId(null)}>
+                        <Text style={{ color: Navy.accent, fontSize: 13, fontWeight: 'bold' }}>Cambiar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   
                   <Text style={styles.label}>Puntuación</Text>
                   <View style={{ marginBottom: 15 }}>
@@ -216,6 +256,17 @@ const styles = StyleSheet.create({
   },
   btnPrimary: { backgroundColor: Navy.accent, padding: 14, borderRadius: 8, alignItems: 'center' },
   btnText: { color: '#060D1F', fontWeight: 'bold', fontSize: 14 },
+
+  turnoChip: {
+    backgroundColor: Navy.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Navy.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    marginRight: 10
+  },
+  turnoChipText: { color: Navy.textPrimary, fontSize: 13, fontWeight: '600' },
 
   sectionTitle: { color: Navy.textPrimary, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
   

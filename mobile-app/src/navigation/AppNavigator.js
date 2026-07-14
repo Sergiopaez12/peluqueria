@@ -1,5 +1,5 @@
-import React, { useContext } from 'react';
-import { Text } from 'react-native';
+import React, { useContext, useEffect } from 'react';
+import { Text, Platform } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -148,7 +148,24 @@ function AdminTabs() {
 }
 
 export default function AppNavigator() {
-  const { token, usuario, loading } = useContext(AuthContext);
+  const { token, usuario, loading, logout } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && token != null) {
+      // Agregamos un punto en el historial al iniciar sesión
+      window.history.pushState({ loggedIn: true }, '');
+
+      const handlePopState = () => {
+        // Al tocar la flecha hacia atrás de Google/Chrome, cerramos sesión
+        logout();
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }
+  }, [token, logout]);
 
   if (loading) {
     return null;

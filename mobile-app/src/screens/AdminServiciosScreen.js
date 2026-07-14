@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Switch, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Switch, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -95,21 +95,30 @@ export default function AdminServiciosScreen() {
     setGuardando(false);
   };
 
+  const ejecutarEliminarServicio = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/servicios/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Platform.OS === 'web') window.alert('¡Éxito! Servicio eliminado.');
+      else Alert.alert('¡Éxito!', 'Servicio eliminado.');
+      cargarServicios();
+    } catch (e) {
+      if (Platform.OS === 'web') window.alert('Error: No se pudo eliminar el servicio.');
+      else Alert.alert('Error', 'No se pudo eliminar el servicio.');
+    }
+  };
+
   const handleEliminarServicio = (id, nombre) => {
-    Alert.alert('Eliminar Servicio', `¿Estás seguro de que querés eliminar permanentemente el servicio "${nombre}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', onPress: async () => {
-        try {
-          await axios.delete(`${API_URL}/servicios/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          Alert.alert('¡Éxito!', 'Servicio eliminado.');
-          cargarServicios();
-        } catch (e) {
-          Alert.alert('Error', 'No se pudo eliminar el servicio.');
-        }
-      }, style: 'destructive' }
-    ]);
+    if (Platform.OS === 'web') {
+      const ok = window.confirm(`¿Estás seguro de que querés eliminar permanentemente el servicio "${nombre}"?`);
+      if (ok) ejecutarEliminarServicio(id);
+    } else {
+      Alert.alert('Eliminar Servicio', `¿Estás seguro de que querés eliminar permanentemente el servicio "${nombre}"?`, [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', onPress: () => ejecutarEliminarServicio(id), style: 'destructive' }
+      ]);
+    }
   };
 
   const renderItem = ({ item }) => {

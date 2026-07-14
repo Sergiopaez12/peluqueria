@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const TurnoSchema = new mongoose.Schema({
-    usuarioId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
+    usuarioId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: false },
     cliente:    { type: String, required: true },
     servicio:   { type: String, required: true },
     fecha:      { type: String, required: true },

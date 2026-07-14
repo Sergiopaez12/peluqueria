@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { Navy } from '../constants/theme';
@@ -21,20 +21,22 @@ export default function PerfilScreen() {
 
   const handleGuardarCambios = async () => {
     if (!nombre) {
-      Alert.alert('Error', 'El nombre no puede estar vacío.');
+      if (Platform.OS === 'web') window.alert('Error: El nombre no puede estar vacío.');
+      else Alert.alert('Error', 'El nombre no puede estar vacío.');
       return;
     }
     
     if (passwordActual || passwordNueva) {
       if (!passwordActual || !passwordNueva) {
-        Alert.alert('Error', 'Completá ambos campos de contraseña para realizar el cambio.');
+        if (Platform.OS === 'web') window.alert('Error: Completá ambos campos de contraseña para realizar el cambio.');
+        else Alert.alert('Error', 'Completá ambos campos de contraseña para realizar el cambio.');
         return;
       }
     }
 
     setGuardando(true);
     try {
-      const res = await axios.put(`${API_URL}/auth/perfil`, {
+      await axios.put(`${API_URL}/auth/perfil`, {
         nombre,
         passwordActual: passwordActual || undefined,
         passwordNueva: passwordNueva || undefined
@@ -42,55 +44,80 @@ export default function PerfilScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      Alert.alert('¡Éxito!', 'Perfil actualizado correctamente.');
+      const msj = 'Perfil actualizado correctamente.';
+      if (Platform.OS === 'web') window.alert(`¡Éxito! ${msj}`);
+      else Alert.alert('¡Éxito!', msj);
+
       setPasswordActual('');
       setPasswordNueva('');
       
-      // Intentar refrescar la sesión si es posible, o simplemente informar
-      // Nota: El authContext almacena el usuario viejo, podemos pedirle al usuario que vuelva a ingresar si editó la pass
       if (passwordActual && passwordNueva) {
-        Alert.alert('Sesión Cerrada', 'Por seguridad, ingresá nuevamente con tu nueva contraseña.', [
-          { text: 'Entendido', onPress: logout }
-        ]);
+        if (Platform.OS === 'web') {
+          window.alert('Por seguridad, tu sesión se cerrará para que ingreses nuevamente con tu nueva contraseña.');
+          logout();
+        } else {
+          Alert.alert('Sesión Cerrada', 'Por seguridad, ingresá nuevamente con tu nueva contraseña.', [
+            { text: 'Entendido', onPress: logout }
+          ]);
+        }
       }
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'No se pudo actualizar el perfil.');
+      const msjErr = error.response?.data?.message || 'No se pudo actualizar el perfil.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
     }
     setGuardando(false);
   };
 
+  const ejecutarEliminacion = async (password) => {
+    setEliminando(true);
+    try {
+      await axios.delete(`${API_URL}/auth/perfil`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { password }
+      });
+      if (Platform.OS === 'web') window.alert('Adiós: Tu cuenta ha sido eliminada. Lamentamos verte partir.');
+      else Alert.alert('Adiós', 'Tu cuenta ha sido eliminada. Lamentamos verte partir.');
+      logout();
+    } catch (err) {
+      const msjErr = err.response?.data?.message || 'Contraseña incorrecta o error al eliminar.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
+    }
+    setEliminando(false);
+  };
+
   const handleEliminarCuenta = () => {
-    Alert.prompt(
-      'Eliminar Cuenta',
-      'Esta acción es irreversible y borrará todos tus turnos. Ingresá tu contraseña para confirmar:',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar y Eliminar',
-          onPress: async (password) => {
-            if (!password) {
-              Alert.alert('Error', 'Contraseña requerida.');
-              return;
-            }
-            setEliminando(true);
-            try {
-              await axios.delete(`${API_URL}/auth/perfil`, {
-                headers: { Authorization: `Bearer ${token}` },
-                data: { password }
-              });
-              Alert.alert('Adiós', 'Tu cuenta ha sido eliminada. Lamentamos verte partir.', [
-                { text: 'Cerrar', onPress: logout }
-              ]);
-            } catch (err) {
-              Alert.alert('Error', err.response?.data?.message || 'Contraseña incorrecta o error al eliminar.');
-            }
-            setEliminando(false);
-          },
-          style: 'destructive'
+    if (Platform.OS === 'web') {
+      const pass = window.prompt('Esta acción es irreversible y borrará todos tus turnos. Ingresá tu contraseña actual para confirmar la eliminación:');
+      if (pass !== null) {
+        if (!pass) {
+          window.alert('Error: Contraseña requerida.');
+          return;
         }
-      ],
-      'secure-text'
-    );
+        ejecutarEliminacion(pass);
+      }
+    } else {
+      Alert.prompt(
+        'Eliminar Cuenta',
+        'Esta acción es irreversible y borrará todos tus turnos. Ingresá tu contraseña para confirmar:',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Confirmar y Eliminar',
+            onPress: (password) => {
+              if (!password) {
+                Alert.alert('Error', 'Contraseña requerida.');
+                return;
+              }
+              ejecutarEliminacion(password);
+            },
+            style: 'destructive'
+          }
+        ],
+        'secure-text'
+      );
+    }
   };
 
   return (

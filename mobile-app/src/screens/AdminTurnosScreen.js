@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -39,28 +39,42 @@ export default function AdminTurnosScreen() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      Alert.alert('¡Éxito!', `Turno ${nuevoEstado === 'confirmado' ? 'confirmado' : 'rechazado'} correctamente.`);
+      const msj = `Turno ${nuevoEstado === 'confirmado' ? 'confirmado' : 'rechazado'} correctamente.`;
+      if (Platform.OS === 'web') window.alert(`¡Éxito! ${msj}`);
+      else Alert.alert('¡Éxito!', msj);
       cargarTurnos();
     } catch (e) {
-      Alert.alert('Error', e.response?.data?.message || 'No se pudo cambiar el estado.');
+      const msjErr = e.response?.data?.message || 'No se pudo cambiar el estado.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
+    }
+  };
+
+  const ejecutarEliminarTurno = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/turnos/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Platform.OS === 'web') window.alert('¡Éxito! Turno eliminado.');
+      else Alert.alert('¡Éxito!', 'Turno eliminado.');
+      cargarTurnos();
+    } catch (e) {
+      const msjErr = e.response?.data?.message || 'No se pudo eliminar el turno.';
+      if (Platform.OS === 'web') window.alert(`Error: ${msjErr}`);
+      else Alert.alert('Error', msjErr);
     }
   };
 
   const handleEliminarTurno = (id) => {
-    Alert.alert('Eliminar Turno', '¿Estás seguro de que querés borrar permanentemente este turno?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', onPress: async () => {
-        try {
-          await axios.delete(`${API_URL}/turnos/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          Alert.alert('¡Éxito!', 'Turno eliminado.');
-          cargarTurnos();
-        } catch (e) {
-          Alert.alert('Error', e.response?.data?.message || 'No se pudo eliminar el turno.');
-        }
-      }, style: 'destructive' }
-    ]);
+    if (Platform.OS === 'web') {
+      const ok = window.confirm('¿Estás seguro de que querés borrar permanentemente este turno?');
+      if (ok) ejecutarEliminarTurno(id);
+    } else {
+      Alert.alert('Eliminar Turno', '¿Estás seguro de que querés borrar permanentemente este turno?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', onPress: () => ejecutarEliminarTurno(id), style: 'destructive' }
+      ]);
+    }
   };
 
   const filteredTurnos = turnos.filter(t => {
